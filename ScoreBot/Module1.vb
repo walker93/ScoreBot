@@ -4,7 +4,7 @@ Imports Telegram.Bot.Types
 Module Module1
     Dim WithEvents api As Api
     Sub Main()
-        api = New Api("217500308:AAG_EiUHU4pOLUi74jxDn-YUbuEQCbcWXJ8")
+        api = New Api(token.token)
         Console.WriteLine(api.GetMe.Result.Username)
         api.StartReceiving()
         Console.WriteLine("bot attivo")
