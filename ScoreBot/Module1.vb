@@ -41,12 +41,15 @@ Module Module1
         Dim message As Message = e.Message
         If message.Chat.Type <> ChatType.Group Then Exit Sub
 
+        'se il membro non è nei dizionari lo aggiungo
         If Not membri.ContainsKey(message.From.Id) Then
             membri.Add(message.From.Id, message.From.FirstName)
             classifica.Add(message.From.Id, 0)
             salva()
         End If
+
         If message.Type = MessageType.TextMessage Then
+            'è un messaggio di testo, lo processo
             Console.WriteLine(message.Text)
             If message.Text.ToLower.StartsWith("/aggiungi") AndAlso admins.Contains(message.From.Id) Then
                 'Aggiungi punti
@@ -59,10 +62,10 @@ Module Module1
                         classifica.Item(message.ReplyToMessage.From.Id) += punti
                         api.SendTextMessage(message.Chat.Id, message.ReplyToMessage.From.FirstName & " guadagna " & punti & " punti!",, message.MessageId)
                     Else
-                        If membri.ContainsValue(params.Last) Then
+                        If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = params.Last.ToLower()).Count() > 0 Then
                             Dim membro As ULong
                             For Each record As KeyValuePair(Of ULong, String) In membri
-                                If record.Value = params.Last Then membro = record.Key
+                                If record.Value.ToLower = params.Last.ToLower Then membro = record.Key
                             Next
                             If membro <> 0 Then
                                 classifica.Item(membro) += punti
@@ -84,13 +87,13 @@ Module Module1
 
                 If Integer.TryParse(params(1), punti) Then
                     If message.ReplyToMessage IsNot Nothing Then
-                        classifica.Item(message.ReplyToMessage.From.Id) += punti
+                        classifica.Item(message.ReplyToMessage.From.Id) -= punti
                         api.SendTextMessage(message.Chat.Id, message.ReplyToMessage.From.FirstName & " perde " & punti & " punti!",, message.MessageId)
                     Else
-                        If membri.ContainsValue(params.Last) Then
+                        If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = params.Last.ToLower()).Count() > 0 Then
                             Dim membro As ULong
                             For Each record As KeyValuePair(Of ULong, String) In membri
-                                If record.Value = params.Last Then membro = record.Key
+                                If record.Value.ToLower = params.Last.ToLower Then membro = record.Key
                             Next
                             If membro <> 0 Then
                                 classifica.Item(membro) -= punti
@@ -114,13 +117,15 @@ Module Module1
             ElseIf message.Text.ToLower.StartsWith("/classifica") Then
                 'mostra classifica
                 Dim reply As New StringBuilder
-
+                Dim i As Integer = 1
                 For Each key In classifica.Keys
-                    reply.AppendLine(membri.Item(key) & ": " & classifica.Item(key))
+                    reply.AppendLine(i & "° " & membri.Item(key) & ": " & classifica.Item(key))
+                    i += 1
                 Next
                 api.SendTextMessage(message.Chat.Id, reply.ToString,, message.MessageId)
             End If
         Else
+            'non è un messaggio di testo, ma di servizio
             If message.NewChatParticipant IsNot Nothing Then
                 'nuovo membro
                 Dim membro = message.NewChatParticipant
