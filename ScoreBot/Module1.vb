@@ -5,19 +5,18 @@ Imports Telegram.Bot.Types
 
 Module Module1
     Dim WithEvents api As Api
-
+    Dim flush As Boolean
     Dim classifica As New Dictionary(Of ULong, Integer)
     Dim membri As New Dictionary(Of ULong, String)
-
-    Sub Main()
+    Dim time_start As Date = Date.UtcNow
+    Sub Main(ByVal args() As String)
         api = New Api(token)
         Dim bot = api.GetMe.Result
         Console.WriteLine(bot.Username & ": " & bot.Id)
-
         carica()
-
+        flush = args(0).Contains("flush")
         Dim thread As New Threading.Thread(New Threading.ThreadStart(AddressOf run))
-        thread.Start()
+            thread.Start()
     End Sub
     Sub run()
         api.StartReceiving()
@@ -39,14 +38,23 @@ Module Module1
 
     Private Sub api_MessageReceived(sender As Object, e As MessageEventArgs) Handles api.MessageReceived
         Dim message As Message = e.Message
+        'controllo flush, se attivo ignoro il messaggio
+        If flush Then
+            If message.Date < time_start Then Exit Sub
+        End If
         If message.Chat.Type <> ChatType.Group Then Exit Sub
 
         'se il membro non è nei dizionari lo aggiungo
         If Not membri.ContainsKey(message.From.Id) Then
             membri.Add(message.From.Id, message.From.FirstName)
             classifica.Add(message.From.Id, 0)
-            salva()
+        Else
+            'se lo è, verifico che il nome corrisponda
+            If Not membri.Item(message.From.Id) = message.From.FirstName Then
+                membri.Item(message.From.Id) = membri.Item(message.From.Id) = message.From.FirstName
+            End If
         End If
+        salva()
 
         If message.Type = MessageType.TextMessage Then
             'è un messaggio di testo, lo processo
@@ -69,7 +77,7 @@ Module Module1
                             Next
                             If membro <> 0 Then
                                 classifica.Item(membro) += punti
-                                salva()
+
                                 api.SendTextMessage(message.Chat.Id, params.Last & " guadagna " & punti & " punti!",, message.MessageId)
                             Else
                                 api.SendTextMessage(message.Chat.Id, "Utente non trovato",, message.MessageId)
@@ -97,7 +105,6 @@ Module Module1
                             Next
                             If membro <> 0 Then
                                 classifica.Item(membro) -= punti
-                                salva()
                                 api.SendTextMessage(message.Chat.Id, params.Last & " perde " & punti & " punti!",, message.MessageId)
                             Else
                                 api.SendTextMessage(message.Chat.Id, "Utente non trovato",, message.MessageId)
@@ -113,13 +120,15 @@ Module Module1
                 For Each key In keys
                     classifica.Item(key) = 0
                 Next
-                salva()
+
             ElseIf message.Text.ToLower.StartsWith("/classifica") Then
                 'mostra classifica
                 Dim reply As New StringBuilder
                 Dim i As Integer = 1
-                For Each key In classifica.Keys
-                    reply.AppendLine(i & "° " & membri.Item(key) & ": " & classifica.Item(key))
+                Dim sortedList = From pair In classifica
+                                 Order By pair.Value Descending
+                For Each pair In sortedList
+                    reply.AppendLine(i & "° " & membri.Item(pair.Key) & ": " & classifica.Item(pair.Key))
                     i += 1
                 Next
                 api.SendTextMessage(message.Chat.Id, reply.ToString,, message.MessageId)
@@ -131,7 +140,7 @@ Module Module1
                 Dim membro = message.NewChatParticipant
                 membri.Add(membro.Id, membro.FirstName)
                 classifica.Add(membro.Id, 0)
-                salva()
+
             ElseIf message.LeftChatParticipant IsNot Nothing Then
                 'uscito membro
                 Dim membro = message.LeftChatParticipant
@@ -139,7 +148,7 @@ Module Module1
                 classifica.Remove(membro.Id)
             End If
         End If
-
+        salva()
     End Sub
 
     Sub carica()
@@ -149,7 +158,7 @@ Module Module1
         For Each line As String In IO.File.ReadAllLines(file_classifica)
             classifica.Add(line.Split(";")(0), line.Split(";")(1))
         Next
-        classifica.OrderBy(Function(x) x.Value)
+
 
         'legge da file membri e li inserisce nel dizionario
         Dim file_membri As String = "membri.txt"
@@ -173,7 +182,6 @@ Module Module1
         Next
         IO.File.WriteAllLines(file_classifica, lines)
 
-
         Dim file_membri As String = "membri.txt"
         lines = {}
         IO.File.Delete(file_membri)
@@ -181,7 +189,7 @@ Module Module1
             lines.Add(record.Key & ";" & record.Value)
         Next
         IO.File.WriteAllLines(file_membri, lines)
-        classifica.OrderBy(Function(x) x.Value)
+
     End Sub
 
 End Module
