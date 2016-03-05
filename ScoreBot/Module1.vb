@@ -50,10 +50,60 @@ Module Module1
             Console.WriteLine(message.Text)
             If message.Text.ToLower.StartsWith("/aggiungi") AndAlso admins.Contains(message.From.Id) Then
                 'Aggiungi punti
+                Dim params() As String = message.Text.Split(" ")
+                Dim punti As Integer
+                If params.Length < 2 Then Exit Sub
 
+                If Integer.TryParse(params(1), punti) Then
+                    If message.ReplyToMessage IsNot Nothing Then
+                        classifica.Item(message.ReplyToMessage.From.Id) += punti
+                        api.SendTextMessage(message.Chat.Id, message.ReplyToMessage.From.FirstName & " guadagna " & punti & " punti!",, message.MessageId)
+                    Else
+                        If membri.ContainsValue(params.Last) Then
+                            Dim membro As ULong
+                            For Each record As KeyValuePair(Of ULong, String) In membri
+                                If record.Value = params.Last Then membro = record.Key
+                            Next
+                            If membro <> 0 Then
+                                classifica.Item(membro) += punti
+                                salva()
+                                api.SendTextMessage(message.Chat.Id, params.Last & " guadagna " & punti & " punti!",, message.MessageId)
+                            Else
+                                api.SendTextMessage(message.Chat.Id, "Utente non trovato",, message.MessageId)
+                            End If
+                        End If
+                    End If
+                Else
+                    api.SendTextMessage(message.Chat.Id, "Impossibile riconoscere valore punteggio",, message.MessageId)
+                End If
             ElseIf message.Text.ToLower.StartsWith("/togli") AndAlso admins.Contains(message.From.Id) Then
                 'Togli punti
+                Dim params() As String = message.Text.Split(" ")
+                Dim punti As Integer
+                If params.Length < 2 Then Exit Sub
 
+                If Integer.TryParse(params(1), punti) Then
+                    If message.ReplyToMessage IsNot Nothing Then
+                        classifica.Item(message.ReplyToMessage.From.Id) += punti
+                        api.SendTextMessage(message.Chat.Id, message.ReplyToMessage.From.FirstName & " perde " & punti & " punti!",, message.MessageId)
+                    Else
+                        If membri.ContainsValue(params.Last) Then
+                            Dim membro As ULong
+                            For Each record As KeyValuePair(Of ULong, String) In membri
+                                If record.Value = params.Last Then membro = record.Key
+                            Next
+                            If membro <> 0 Then
+                                classifica.Item(membro) -= punti
+                                salva()
+                                api.SendTextMessage(message.Chat.Id, params.Last & " perde " & punti & " punti!",, message.MessageId)
+                            Else
+                                api.SendTextMessage(message.Chat.Id, "Utente non trovato",, message.MessageId)
+                            End If
+                        End If
+                    End If
+                Else
+                    api.SendTextMessage(message.Chat.Id, "Impossibile riconoscere valore punteggio",, message.MessageId)
+                End If
             ElseIf message.Text.ToLower.StartsWith("/reset") AndAlso admins.Contains(message.From.Id) Then
                 'Azzera punteggio
                 Dim keys() = classifica.Keys.ToArray
@@ -102,6 +152,10 @@ Module Module1
         For Each line As String In IO.File.ReadAllLines(file_membri)
             membri.Add(line.Split(";")(0), line.Split(";")(1))
         Next
+    End Sub
+
+    Sub modifica_punti(punti As Integer, message As Message)
+
     End Sub
 
     Sub salva()
