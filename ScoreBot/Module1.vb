@@ -51,7 +51,7 @@ Module Module1
         Else
             'se lo è, verifico che il nome corrisponda
             If Not membri.Item(message.From.Id) = message.From.FirstName Then
-                membri.Item(message.From.Id) = membri.Item(message.From.Id) = message.From.FirstName
+                membri.Item(message.From.Id) = message.From.FirstName
             End If
         End If
         salva()
