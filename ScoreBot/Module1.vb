@@ -1,22 +1,22 @@
-﻿Imports System.ComponentModel
-Imports System.Text
+﻿Imports System.Text
 Imports Telegram.Bot
 Imports Telegram.Bot.Types
 
 Module Module1
     Dim WithEvents api As Api
-    Dim flush As Boolean
+    Dim flush As Boolean = False
     Dim classifica As New Dictionary(Of ULong, Integer)
     Dim membri As New Dictionary(Of ULong, String)
     Dim time_start As Date = Date.UtcNow
+
     Sub Main(ByVal args() As String)
         api = New Api(token)
         Dim bot = api.GetMe.Result
         Console.WriteLine(bot.Username & ": " & bot.Id)
         carica()
-        flush = args(0).Contains("flush")
+        If args.Length > 0 Then flush = args(0).Contains("flush")
         Dim thread As New Threading.Thread(New Threading.ThreadStart(AddressOf run))
-            thread.Start()
+        thread.Start()
     End Sub
     Sub run()
         api.StartReceiving()
@@ -127,12 +127,38 @@ Module Module1
                 Dim i As Integer = 1
                 Dim sortedList = From pair In classifica
                                  Order By pair.Value Descending
+
+                Dim params() As String = message.Text.Split(" ")
+                params.RemoveAt(0)
+                Dim params_list As New List(Of String)
+                Dim trovato As Boolean = True
+                If params.Length > 0 Then
+                    Try
+                        params_list.Add(membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = params.Last.ToLower()).First)
+                    Catch ex As Exception
+                        trovato = False
+                        Console.WriteLine("nessun membro con quel nome")
+                    End Try
+                End If
+                'invio tutta la classifica
+                If Not trovato Then reply.AppendLine("Utente non trovato, mostro classifica generale").AppendLine()
                 For Each pair In sortedList
-                    reply.AppendLine(i & "° " & membri.Item(pair.Key) & ": " & classifica.Item(pair.Key))
+                    If params_list.Count = 0 Then
+                        'nessun parametro, aggiungo tutti
+
+                        reply.AppendLine(i & "° " & membri.Item(pair.Key) & ": " & classifica.Item(pair.Key))
+                    Else
+                        If params_list.Contains(membri.Item(pair.Key)) Then
+                            reply.AppendLine(i & "° " & membri.Item(pair.Key) & ": " & classifica.Item(pair.Key))
+
+                        End If
+                    End If
                     i += 1
                 Next
                 api.SendTextMessage(message.Chat.Id, reply.ToString,, message.MessageId)
+
             End If
+
         Else
             'non è un messaggio di testo, ma di servizio
             If message.NewChatParticipant IsNot Nothing Then
