@@ -19,11 +19,28 @@ Module Module1
         thread.Start()
     End Sub
 
-    Sub run()
-        api.StartReceiving()
-        Console.WriteLine("bot attivo")
-        Console.ReadKey()
-        api.StopReceiving()
+    Async Sub run()
+        Dim updates() As Update
+        Dim offset As Integer = 0
+        While True
+            Try
+                updates = Await api.GetUpdates(offset,, 20)
+                For Each up As Update In updates
+                    Select Case up.Type
+                        Case UpdateType.MessageUpdate
+                            process_Message(up.Message)
+                    End Select
+                    offset = up.Id + 1
+                Next
+            Catch ex As AggregateException
+                Threading.Thread.Sleep(20 * 1000)
+                Console.WriteLine("error getting updates: " & ex.InnerException.Message)
+            End Try
+        End While
+        'api.StartReceiving()
+        'Console.WriteLine("bot attivo")
+        'Console.ReadKey()
+        'api.StopReceiving()
     End Sub
 
     'Private Sub api_InlineQueryReceived(sender As Object, e As InlineQueryEventArgs) Handles api.InlineQueryReceived
@@ -39,6 +56,10 @@ Module Module1
 
     Private Sub api_MessageReceived(sender As Object, e As MessageEventArgs) Handles api.MessageReceived
         Dim message As Message = e.Message
+        process_Message(message)
+    End Sub
+
+    Sub process_Message(message As Message)
         'controllo flush, se attivo ignoro il messaggio
         If flush Then
             If message.Date < time_start Then Exit Sub
@@ -177,7 +198,7 @@ Module Module1
         If message.ReplyToMessage IsNot Nothing Then
             If classifica.ContainsKey(message.ReplyToMessage.From.Id) Then
                 classifica.Item(message.ReplyToMessage.From.Id) += punti
-                Return message.ReplyToMessage.From.FirstName & action & punti & " punti!"
+                Return message.ReplyToMessage.From.FirstName & action & Math.Abs(punti) & " punti!"
             End If
         Else
             If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = nome.ToLower()).Count() > 0 Then
@@ -187,7 +208,7 @@ Module Module1
                 Next
                 If membro <> 0 Then
                     classifica.Item(membro) += punti
-                    Return nome & action & punti & " punti!"
+                    Return nome & action & Math.Abs(punti) & " punti!"
                 End If
             End If
         End If
