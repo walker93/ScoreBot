@@ -19,12 +19,12 @@ Module Module1
         thread.Start()
     End Sub
 
-    Async Sub run()
+    Sub run()
         Dim updates() As Update
         Dim offset As Integer = 0
         While True
             Try
-                updates = Await api.GetUpdates(offset,, 20).ConfigureAwait(False)
+                updates = api.GetUpdates(offset,, 20).Result
                 For Each up As Update In updates
                     Select Case up.Type
                         Case UpdateType.MessageUpdate
@@ -192,9 +192,8 @@ Module Module1
     End Sub
 
     Function modifica_punti(punti As Integer, message As Message, nome As String) As String
-        Dim action As String = " guadagna "
+        Dim action As String = If(punti < 0, " perde ", " guadagna ")
         Dim reply As String = "Membro non trovato"
-        If punti < 0 Then action = " perde "
         If message.ReplyToMessage IsNot Nothing Then
             If classifica.ContainsKey(message.ReplyToMessage.From.Id) Then
                 classifica.Item(message.ReplyToMessage.From.Id) += punti
