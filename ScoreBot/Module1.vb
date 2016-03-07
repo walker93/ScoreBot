@@ -24,7 +24,7 @@ Module Module1
         Dim offset As Integer = 0
         While True
             Try
-                updates = Await api.GetUpdates(offset,, 20)
+                updates = Await api.GetUpdates(offset,, 20).ConfigureAwait(False)
                 For Each up As Update In updates
                     Select Case up.Type
                         Case UpdateType.MessageUpdate
