@@ -31,6 +31,8 @@ Module Module1
                             process_Message(up.Message)
                         Case UpdateType.InlineQueryUpdate
                             process_query(up.InlineQuery)
+                        Case UpdateType.ChosenInlineResultUpdate
+
                     End Select
                     offset = up.Id + 1
                 Next
@@ -43,6 +45,25 @@ Module Module1
         'Console.WriteLine("bot attivo")
         'Console.ReadKey()
         'api.StopReceiving()
+    End Sub
+
+    Sub process_ChosenQuery(chosenquery As ChosenInlineResult)
+        Dim resultid = chosenquery.ResultId
+        Dim punti As Integer
+
+        Select Case resultid
+            Case query_points.Contains(resultid)
+                'l'id è un punteggio, aggiorno i punti
+                Integer.TryParse(resultid, punti)
+                Dim member As String = chosenquery.Query
+                modifica_punti_noreply(punti, member)
+
+            Case classifica.ContainsKey(resultid)
+                ULong.TryParse(chosenquery.Query, punti)
+                If chosenquery.Query.ToLower = "classifica" Then Exit Sub
+                'l'id è un membro, aggiorno i punti
+                modifica_punti_noreply(punti, membri.Item(resultid))
+        End Select
     End Sub
 
     Private Sub api_InlineQueryReceived(sender As Object, e As InlineQueryEventArgs) Handles api.InlineQueryReceived
@@ -60,7 +81,7 @@ Module Module1
         Dim trovato As Boolean = True
         Dim sortedList = From pair In classifica
                          Order By pair.Value Descending
-        If Query.Query.ToLower = "classifica" Then
+        If Query.Query.ToLower = "classifica" Or Query.Query = "" Then
             For Each member As KeyValuePair(Of ULong, Integer) In sortedList
                 res = New InlineQueryResultArticle
                 res.Id = member.Key
@@ -252,18 +273,23 @@ Module Module1
                 Return message.ReplyToMessage.From.FirstName & action & Math.Abs(punti) & " punti!"
             End If
         Else
-            If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = nome.ToLower()).Count() > 0 Then
-                Dim membro As ULong
-                For Each record As KeyValuePair(Of ULong, String) In membri
-                    If record.Value.ToLower = nome.ToLower Then membro = record.Key
-                Next
-                If membro <> 0 Then
-                    classifica.Item(membro) += punti
-                    Return nome & action & Math.Abs(punti) & " punti!"
-                End If
-            End If
+            Return modifica_punti_noreply(punti, nome)
         End If
         Return reply
+    End Function
+
+    Function modifica_punti_noreply(punti As Integer, nome As String) As String
+        Dim action As String = If(punti < 0, " perde ", " guadagna ")
+        If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = nome.ToLower()).Count() > 0 Then
+            Dim membro As ULong
+            For Each record As KeyValuePair(Of ULong, String) In membri
+                If record.Value.ToLower = nome.ToLower Then membro = record.Key
+            Next
+            If membro <> 0 Then
+                classifica.Item(membro) += punti
+                Return nome & action & Math.Abs(punti) & " punti!"
+            End If
+        End If
     End Function
 
     Sub salva()
