@@ -72,8 +72,8 @@ Module Module1
                 Console.WriteLine("Classifica resettata")
             End If
         ElseIf classifica.ContainsKey(resultid) Then
-            ULong.TryParse(chosenquery.Query, punti)
             If chosenquery.Query.ToLower = "classifica" Then Exit Sub
+            Integer.TryParse(chosenquery.Query, punti)
             'l'id è un membro, aggiorno i punti
             modifica_punti_noreply(punti, membri.Item(resultid))
             Console.WriteLine(membri.Item(resultid) & " guadagna " & punti)
@@ -149,12 +149,13 @@ Module Module1
         ElseIf admins.Contains(Query.From.Id) AndAlso Integer.TryParse(Query.Query, punti) Then
             'invio "Aggiungi <punti> a membro1/2/3"
             Dim action As String = If(punti < 0, " perde ", " guadagna ")
+            Dim query_action As String = If(punti < 0, " Togli ", " Aggiungi ")
             For Each member As KeyValuePair(Of ULong, String) In membri
                 res = New InlineQueryResultArticle
                 res.Id = member.Key
                 res.MessageText = membri.Item(member.Key) & action & Math.Abs(punti) & " punti!"
                 'classificaBuilder.AppendLine(res.MessageText)
-                res.Title = "Aggiungi " & punti & " a " & membri.Item(member.Key)
+                res.Title = query_action & Math.Abs(punti) & " a " & membri.Item(member.Key)
                 i += 1
                 results.Add(res)
             Next
@@ -168,10 +169,11 @@ Module Module1
             End Try
             For Each point As Integer In query_points
                 Dim action As String = If(point < 0, " perde ", " guadagna ")
+                Dim query_action As String = If(punti < 0, " Togli ", " Aggiungi ")
                 res = New InlineQueryResultArticle
                 res.Id = point.ToString
                 res.MessageText = params_list.First & action & Math.Abs(point) & " punti!"
-                res.Title = "Aggiungi " & point & " a " & params_list.First
+                res.Title = query_action & Math.Abs(point) & " a " & params_list.First
                 results.Add(res)
             Next
         End If
