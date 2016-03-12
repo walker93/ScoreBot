@@ -28,11 +28,11 @@ Module Module1
                 For Each up As Update In updates
                     Select Case up.Type
                         Case UpdateType.MessageUpdate
-                            process_Message(up.Message)
+                            'process_Message(up.Message)
                         Case UpdateType.InlineQueryUpdate
                             process_query(up.InlineQuery)
                         Case UpdateType.ChosenInlineResultUpdate
-
+                            process_ChosenQuery(up.ChosenInlineResult)
                     End Select
                     offset = up.Id + 1
                 Next
@@ -50,20 +50,42 @@ Module Module1
     Sub process_ChosenQuery(chosenquery As ChosenInlineResult)
         Dim resultid = chosenquery.ResultId
         Dim punti As Integer
+        'Integer.TryParse(resultid, punti)
+        If resultid = "Aggiunta" Then
+            If Not membri.ContainsKey(chosenquery.From.Id) Then
+                membri.Add(chosenquery.From.Id, chosenquery.From.FirstName)
+                classifica.Add(chosenquery.From.Id, 0)
+                Console.WriteLine(chosenquery.From.FirstName & " aggiunto")
+            End If
+        ElseIf resultid = "Rimozione" Then
+            If membri.ContainsKey(chosenquery.From.Id) Then
+                membri.Remove(chosenquery.From.Id)
+                classifica.Remove(chosenquery.From.Id)
+                Console.WriteLine(chosenquery.From.FirstName & " rimosso")
+            End If
+        ElseIf resultid = "Reset" Then
+            If admins.Contains(chosenquery.From.Id) Then
+                Dim keys() = classifica.Keys.ToArray
+                For Each key In keys
+                    classifica.Item(key) = 0
+                Next
+                Console.WriteLine("Classifica resettata")
+            End If
+        ElseIf classifica.ContainsKey(resultid) Then
+            ULong.TryParse(chosenquery.Query, punti)
+            If chosenquery.Query.ToLower = "classifica" Then Exit Sub
+            'l'id è un membro, aggiorno i punti
+            modifica_punti_noreply(punti, membri.Item(resultid))
+            Console.WriteLine(membri.Item(resultid) & " guadagna " & punti)
+        ElseIf query_points.Contains(resultid) Then
+            'l'id è un punteggio, aggiorno i punti
+            Integer.TryParse(resultid, punti)
+            Dim member As String = chosenquery.Query
+            modifica_punti_noreply(punti, member)
+            Console.WriteLine(member & " guadagna " & punti)
 
-        Select Case resultid
-            Case query_points.Contains(resultid)
-                'l'id è un punteggio, aggiorno i punti
-                Integer.TryParse(resultid, punti)
-                Dim member As String = chosenquery.Query
-                modifica_punti_noreply(punti, member)
-
-            Case classifica.ContainsKey(resultid)
-                ULong.TryParse(chosenquery.Query, punti)
-                If chosenquery.Query.ToLower = "classifica" Then Exit Sub
-                'l'id è un membro, aggiorno i punti
-                modifica_punti_noreply(punti, membri.Item(resultid))
-        End Select
+        End If
+        salva()
     End Sub
 
     Private Sub api_InlineQueryReceived(sender As Object, e As InlineQueryEventArgs) Handles api.InlineQueryReceived
@@ -82,10 +104,15 @@ Module Module1
         Dim sortedList = From pair In classifica
                          Order By pair.Value Descending
         If Query.Query.ToLower = "classifica" Or Query.Query = "" Then
+            If membri.ContainsKey(Query.From.Id) Then
+                If Not membri.Item(Query.From.Id) = Query.From.FirstName Then
+                    membri.Item(Query.From.Id) = Query.From.FirstName
+                End If
+            End If
             For Each member As KeyValuePair(Of ULong, Integer) In sortedList
                 res = New InlineQueryResultArticle
                 res.Id = member.Key
-                res.MessageText = i & "° " & membri.Item(member.Key) & ": " & classifica.Item(member.Key)
+                res.MessageText = i & "° " & membri.Item(member.Key) & ": " & classifica.Item(member.Key) & " punti"
                 classificaBuilder.AppendLine(res.MessageText)
                 res.Title = res.MessageText
                 i += 1
@@ -97,6 +124,28 @@ Module Module1
             res.Title = "Tutta la classifica"
             results.Insert(0, res)
 
+        ElseIf "aggiungi".Contains(Query.Query.ToLower) Then
+            If Not membri.ContainsKey(Query.From.Id) Then
+                res = New InlineQueryResultArticle
+                res.Id = "Aggiunta"
+                res.MessageText = Query.From.FirstName & " si è aggiunto a Score Bot"
+                res.Title = "Aggiungimi a Score Bot"
+                results.Add(res)
+            End If
+        ElseIf "rimuovi".Contains(Query.Query.ToLower) Then
+            If membri.ContainsKey(Query.From.Id) Then
+                res = New InlineQueryResultArticle
+                res.Id = "Rimozione"
+                res.MessageText = Query.From.FirstName & " si è rimosso da Score Bot"
+                res.Title = "Rimuovimi da Score Bot"
+                results.Add(res)
+            End If
+        ElseIf admins.Contains(Query.From.Id) AndAlso "reset".Contains(Query.Query.ToLower) Then
+            res = New InlineQueryResultArticle
+            res.Id = "Reset"
+            res.MessageText = "La classifica è stata azzerata"
+            res.Title = "Azzera i punteggi"
+            results.Add(res)
         ElseIf admins.Contains(Query.From.Id) AndAlso Integer.TryParse(Query.Query, punti) Then
             'invio "Aggiungi <punti> a membro1/2/3"
             Dim action As String = If(punti < 0, " perde ", " guadagna ")
@@ -121,13 +170,13 @@ Module Module1
                 Dim action As String = If(point < 0, " perde ", " guadagna ")
                 res = New InlineQueryResultArticle
                 res.Id = point.ToString
-                res.MessageText = membri.Item(params_list.First) & action & Math.Abs(punti) & " punti!"
-                res.Title = "Aggiungi " & point & " a " & membri.Item(params_list.First)
+                res.MessageText = params_list.First & action & Math.Abs(point) & " punti!"
+                res.Title = "Aggiungi " & point & " a " & params_list.First
                 results.Add(res)
             Next
         End If
 
-        If results.Count > 0 Then api.AnswerInlineQuery(Query.Id, results.ToArray, 120, True)
+        If results.Count > 0 Then api.AnswerInlineQuery(Query.Id, results.ToArray, 1, True)
     End Sub
 
     Private Sub api_MessageReceived(sender As Object, e As MessageEventArgs) Handles api.MessageReceived
