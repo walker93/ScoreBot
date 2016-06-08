@@ -7,12 +7,14 @@ Module Module1
     Dim flush As Boolean = False
     Dim classifica As New Dictionary(Of ULong, Integer)
     Dim membri As New Dictionary(Of ULong, String)
+    Dim utenti As New List(Of Integer)
     Dim time_start As Date = Date.UtcNow
     Dim query_points() As Integer = {100, 50, 20, 10, 0, -10, -20, -50, -100}
     Sub Main(ByVal args() As String)
         api = New Api(token)
         Dim bot = api.GetMe.Result
         Console.WriteLine(bot.Username & ": " & bot.Id)
+        load_admins()
         carica()
         If args.Length > 0 Then flush = args(0).Contains("flush")
         Dim thread As New Threading.Thread(New Threading.ThreadStart(AddressOf run))
@@ -38,7 +40,7 @@ Module Module1
                 Next
             Catch ex As AggregateException
                 Threading.Thread.Sleep(20 * 1000)
-                Console.WriteLine("error getting updates: " & ex.InnerException.Message)
+                Console.WriteLine("{0} {1} Error: {2}", Now.ToShortDateString, Now.ToShortTimeString, ex.InnerException.Message)
             End Try
         End While
         'api.StartReceiving()
@@ -71,19 +73,26 @@ Module Module1
                 Next
                 Console.WriteLine("Classifica resettata")
             End If
-        ElseIf classifica.ContainsKey(resultid) Then
-            If chosenquery.Query.ToLower = "classifica" Then Exit Sub
-            Integer.TryParse(chosenquery.Query, punti)
-            'l'id è un membro, aggiorno i punti
-            modifica_punti_noreply(punti, membri.Item(resultid))
-            Console.WriteLine(membri.Item(resultid) & " guadagna " & punti)
         ElseIf query_points.Contains(resultid) Then
             'l'id è un punteggio, aggiorno i punti
             Integer.TryParse(resultid, punti)
             Dim member As String = chosenquery.Query
             modifica_punti_noreply(punti, member)
             Console.WriteLine(member & " guadagna " & punti)
-
+        ElseIf chosenquery.Query.StartsWith("promuovi") Then
+            admins.Add(resultid)
+            save_admins()
+            Console.WriteLine(resultid & " ora è Admin!")
+        ElseIf "retrocedi".Contains(chosenquery.Query) Then
+            admins.Remove(resultid)
+            save_admins()
+            Console.WriteLine(resultid & " ora è utente!")
+        ElseIf classifica.ContainsKey(resultid) Then
+            If chosenquery.Query.ToLower = "classifica" Then Exit Sub
+            Integer.TryParse(chosenquery.Query, punti)
+            'l'id è un membro, aggiorno i punti
+            modifica_punti_noreply(punti, membri.Item(resultid))
+            Console.WriteLine(membri.Item(resultid) & " guadagna " & punti)
         End If
         salva()
     End Sub
@@ -93,7 +102,7 @@ Module Module1
     End Sub
 
     Sub process_query(Query As InlineQuery)
-        Console.WriteLine(Now.ToShortDateString + " " + Query.Id + ": " + Query.Query)
+        Console.WriteLine("{0} {1} From: {2}-{3} ID:{4} TEXT: {5}", Now.ToShortDateString, Now.ToShortTimeString, Query.From.Id, Query.From.FirstName, Query.Id, Query.Query)
         Dim results As New List(Of InlineQueryResult)
         Dim i As Integer = 1
         Dim classificaBuilder As New StringBuilder
@@ -103,10 +112,16 @@ Module Module1
         Dim trovato As Boolean = True
         Dim sortedList = From pair In classifica
                          Order By pair.Value Descending
-        If Query.Query.ToLower = "classifica" Or Query.Query = "" Then
+
+        If Not utenti.Contains(Query.From.Id) Then
+            IO.File.AppendAllText("users.txt", Query.From.Id & vbNewLine)
+            utenti.Add(Query.From.Id)
+        End If
+        If "classifica".Contains(Query.Query.ToLower) Or Query.Query = "" Then
             If membri.ContainsKey(Query.From.Id) Then
                 If Not membri.Item(Query.From.Id) = Query.From.FirstName Then
                     membri.Item(Query.From.Id) = Query.From.FirstName
+                    Console.WriteLine("Updating member name from {0} to {1}", membri.Item(Query.From.Id), Query.From.FirstName)
                 End If
             End If
             For Each member As KeyValuePair(Of ULong, Integer) In sortedList
@@ -159,7 +174,7 @@ Module Module1
                 i += 1
                 results.Add(res)
             Next
-        ElseIf admins.Contains(Query.From.Id) AndAlso membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = Query.Query.ToLower()).Count() > 0 Then
+        ElseIf admins.Contains(Query.From.Id) AndAlso is_member(Query.Query) Then
             'invio "aggiungi 5/10/20/50 punti a <membro>"
             Try
                 params_list.Add(membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = Query.Query.ToLower()).First)
@@ -169,11 +184,38 @@ Module Module1
             End Try
             For Each point As Integer In query_points
                 Dim action As String = If(point < 0, " perde ", " guadagna ")
-                Dim query_action As String = If(punti < 0, " Togli ", " Aggiungi ")
+                Dim query_action As String = If(point < 0, " Togli ", " Aggiungi ")
                 res = New InlineQueryResultArticle
                 res.Id = point.ToString
                 res.MessageText = params_list.First & action & Math.Abs(point) & " punti!"
                 res.Title = query_action & Math.Abs(point) & " a " & params_list.First
+                results.Add(res)
+            Next
+
+        ElseIf Query.From.Id = 1265775 AndAlso Query.Query.StartsWith("promuovi") Then
+            'Promozione Admin
+            If Query.Query.Split(" ").Length > 1 Then
+                Dim id As String = Query.Query.Split(" ")(1)
+                res = New InlineQueryResultArticle
+                res.Id = id
+                res.MessageText = id & " ora è admin!"
+                res.Title = "Promuovi " & id & " ad admin"
+                results.Add(res)
+            End If
+            For Each user In membri
+                res = New InlineQueryResultArticle
+                res.Id = user.Key
+                res.MessageText = user.Value & " ora è admin!"
+                res.Title = "Promuovi " & user.Value & " ad admin"
+                results.Add(res)
+            Next
+        ElseIf Query.From.Id = 1265775 AndAlso "retrocedi".Contains(Query.Query) Then
+            'retrocessione admin
+            For Each admin In admins
+                res = New InlineQueryResultArticle
+                res.Id = admin
+                res.MessageText = admin & "ora non è più admin!"
+                res.Title = "Retrocedi " & admin & " ad utente"
                 results.Add(res)
             Next
         End If
@@ -313,6 +355,13 @@ Module Module1
         For Each line As String In IO.File.ReadAllLines(file_membri)
             membri.Add(line.Split(";")(0), line.Split(";")(1))
         Next
+
+        'legge da file users e li inserisce nella lista
+        Dim file_users As String = "users.txt"
+        If Not IO.File.Exists(file_users) Then IO.File.WriteAllText(file_users, "")
+        For Each line As String In IO.File.ReadAllLines(file_users)
+            utenti.Add(line)
+        Next
     End Sub
 
     Function modifica_punti(punti As Integer, message As Message, nome As String) As String
@@ -331,7 +380,7 @@ Module Module1
 
     Function modifica_punti_noreply(punti As Integer, nome As String) As String
         Dim action As String = If(punti < 0, " perde ", " guadagna ")
-        If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = nome.ToLower()).Count() > 0 Then
+        If is_member(nome) Then
             Dim membro As ULong
             For Each record As KeyValuePair(Of ULong, String) In membri
                 If record.Value.ToLower = nome.ToLower Then membro = record.Key
@@ -360,7 +409,10 @@ Module Module1
             lines.Add(record.Key & ";" & record.Value)
         Next
         IO.File.WriteAllLines(file_membri, lines)
-
     End Sub
 
+    Function is_member(member_name) As Boolean
+        If membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = member_name.tolower()).Count > 0 Then Return True
+        Return False
+    End Function
 End Module
