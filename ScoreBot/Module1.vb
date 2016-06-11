@@ -75,10 +75,10 @@ Module Module1
                 Next
                 Console.WriteLine("Classifica resettata")
             End If
-        ElseIf resultid.Contains("classifica") Then
-            Console.WriteLine("Punteggio membro inviato")
         ElseIf resultid = "class tot" Then
             Console.WriteLine("Classifica completa inviata")
+        ElseIf resultid.Contains("classifica") Then
+            Console.WriteLine("Punteggio membro inviato")
         ElseIf query_points.Contains(resultid) Then
             'l'id è un punteggio, aggiorno i punti
             Integer.TryParse(resultid, punti)
