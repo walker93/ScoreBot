@@ -52,6 +52,8 @@ Module Module1
     Sub process_ChosenQuery(chosenquery As ChosenInlineResult)
         Dim resultid = chosenquery.ResultId
         Dim punti As Integer
+        Dim query_reason As String = If(chosenquery.Query.Split(":").Length > 1, chosenquery.Query.Split(":")(1).Trim, "")
+        Dim query_punti As String = If(chosenquery.Query.Split(":").Length > 1, chosenquery.Query.Split(":")(0).Trim, chosenquery.Query)
         'Integer.TryParse(resultid, punti)
         If resultid = "Aggiunta" Then
             If Not membri.ContainsKey(chosenquery.From.Id) Then
@@ -73,23 +75,27 @@ Module Module1
                 Next
                 Console.WriteLine("Classifica resettata")
             End If
+        ElseIf resultid.Contains("classifica") Then
+            Console.WriteLine("Punteggio membro inviato")
+        ElseIf resultid = "class tot" Then
+            Console.WriteLine("Classifica completa inviata")
         ElseIf query_points.Contains(resultid) Then
             'l'id è un punteggio, aggiorno i punti
             Integer.TryParse(resultid, punti)
-            Dim member As String = chosenquery.Query
+            Dim member As String = query_punti
             modifica_punti_noreply(punti, member)
             Console.WriteLine(member & " guadagna " & punti)
         ElseIf chosenquery.Query.StartsWith("promuovi") Then
             admins.Add(resultid)
             save_admins()
             Console.WriteLine(resultid & " ora è Admin!")
-        ElseIf "retrocedi".Contains(chosenquery.Query) Then
+        ElseIf chosenquery.Query.StartsWith("retrocedi") Then
             admins.Remove(resultid)
             save_admins()
             Console.WriteLine(resultid & " ora è utente!")
         ElseIf classifica.ContainsKey(resultid) Then
             If chosenquery.Query.ToLower = "classifica" Then Exit Sub
-            Integer.TryParse(chosenquery.Query, punti)
+            Integer.TryParse(query_punti, punti)
             'l'id è un membro, aggiorno i punti
             modifica_punti_noreply(punti, membri.Item(resultid))
             Console.WriteLine(membri.Item(resultid) & " guadagna " & punti)
@@ -110,6 +116,8 @@ Module Module1
         Dim punti As Integer
         Dim params_list As New List(Of String)
         Dim trovato As Boolean = True
+        Dim query_reason As String = If(Query.Query.Split(":").Length > 1, Query.Query.Split(":")(1).Trim, "")
+        Dim query_punti As String = If(Query.Query.Split(":").Length > 1, Query.Query.Split(":")(0).Trim, Query.Query)
         Dim sortedList = From pair In classifica
                          Order By pair.Value Descending
 
@@ -126,7 +134,7 @@ Module Module1
             End If
             For Each member As KeyValuePair(Of ULong, Integer) In sortedList
                 res = New InlineQueryResultArticle
-                res.Id = member.Key
+                res.Id = "classifica" + i.ToString
                 res.MessageText = i & "° " & membri.Item(member.Key) & ": " & classifica.Item(member.Key) & " punti"
                 classificaBuilder.AppendLine(res.MessageText)
                 res.Title = res.MessageText
@@ -134,7 +142,7 @@ Module Module1
                 results.Add(res)
             Next
             res = New InlineQueryResultArticle
-            res.Id = "-0"
+            res.Id = "class tot"
             res.MessageText = classificaBuilder.ToString
             res.Title = "Tutta la classifica"
             results.Insert(0, res)
@@ -161,37 +169,47 @@ Module Module1
             res.MessageText = "La classifica è stata azzerata"
             res.Title = "Azzera i punteggi"
             results.Add(res)
-        ElseIf admins.Contains(Query.From.Id) AndAlso Integer.TryParse(Query.Query, punti) Then
+        ElseIf admins.Contains(Query.From.Id) AndAlso Integer.TryParse(query_punti, punti) Then
             'invio "Aggiungi <punti> a membro1/2/3"
             Dim action As String = If(punti < 0, " perde ", " guadagna ")
             Dim query_action As String = If(punti < 0, " Togli ", " Aggiungi ")
             For Each member As KeyValuePair(Of ULong, String) In membri
                 res = New InlineQueryResultArticle
                 res.Id = member.Key
-                res.MessageText = membri.Item(member.Key) & action & Math.Abs(punti) & " punti!"
+                res.MessageText = membri.Item(member.Key) & action & Math.Abs(punti) & " punti"
+                If Not query_reason = "" Then
+                    res.MessageText += " perché " + query_reason
+                    res.Description = "perchè " + query_reason
+                End If
                 'classificaBuilder.AppendLine(res.MessageText)
                 res.Title = query_action & Math.Abs(punti) & " a " & membri.Item(member.Key)
                 i += 1
                 results.Add(res)
             Next
-        ElseIf admins.Contains(Query.From.Id) AndAlso is_member(Query.Query) Then
+        ElseIf admins.Contains(Query.From.Id) AndAlso is_member(query_punti) Then
             'invio "aggiungi 5/10/20/50 punti a <membro>"
             Try
-                params_list.Add(membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = Query.Query.ToLower()).First)
+                params_list.Add(membri.Select(Function(x) x.Value).Where(Function(x) x.ToLower() = query_punti.ToLower()).First)
             Catch ex As Exception
                 trovato = False
                 Console.WriteLine("nessun membro con quel nome")
             End Try
-            For Each point As Integer In query_points
-                Dim action As String = If(point < 0, " perde ", " guadagna ")
-                Dim query_action As String = If(point < 0, " Togli ", " Aggiungi ")
-                res = New InlineQueryResultArticle
-                res.Id = point.ToString
-                res.MessageText = params_list.First & action & Math.Abs(point) & " punti!"
-                res.Title = query_action & Math.Abs(point) & " a " & params_list.First
-                results.Add(res)
-            Next
 
+            For Each point As Integer In query_points
+                For Each membro In params_list
+                    Dim action As String = If(point < 0, " perde ", " guadagna ")
+                    Dim query_action As String = If(point < 0, " Togli ", " Aggiungi ")
+                    res = New InlineQueryResultArticle
+                    res.Id = point.ToString
+                    res.MessageText = membro & action & Math.Abs(point) & " punti"
+                    If Not query_reason = "" Then
+                        res.MessageText += " perché " + query_reason
+                        res.Description = "perchè " + query_reason
+                    End If
+                    res.Title = query_action & Math.Abs(point) & " a " & membro
+                    results.Add(res)
+                Next
+            Next
         ElseIf Query.From.Id = 1265775 AndAlso Query.Query.StartsWith("promuovi") Then
             'Promozione Admin
             If Query.Query.Split(" ").Length > 1 Then
@@ -209,7 +227,7 @@ Module Module1
                 res.Title = "Promuovi " & user.Value & " ad admin"
                 results.Add(res)
             Next
-        ElseIf Query.From.Id = 1265775 AndAlso "retrocedi".Contains(Query.Query) Then
+        ElseIf Query.From.Id = 1265775 AndAlso Query.Query.StartsWith("retrocedi") Then
             'retrocessione admin
             For Each admin In admins
                 res = New InlineQueryResultArticle
