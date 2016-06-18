@@ -10,6 +10,8 @@ Module Module1
     Dim utenti As New List(Of Integer)
     Dim time_start As Date = Date.UtcNow
     Dim query_points() As Integer = {100, 50, 20, 10, 0, -10, -20, -50, -100}
+    Dim pila As New Queue(Of Tuple(Of String, String))
+
     Sub Main(ByVal args() As String)
         api = New Api(token)
         Dim bot = api.GetMe.Result
@@ -54,18 +56,18 @@ Module Module1
         Dim punti As Integer
         Dim query_reason As String = If(chosenquery.Query.Split(":").Length > 1, chosenquery.Query.Split(":")(1).Trim, "")
         Dim query_punti As String = If(chosenquery.Query.Split(":").Length > 1, chosenquery.Query.Split(":")(0).Trim, chosenquery.Query)
-        'Integer.TryParse(resultid, punti)
+        Dim output As String = ""
         If resultid = "Aggiunta" Then
             If Not membri.ContainsKey(chosenquery.From.Id) Then
                 membri.Add(chosenquery.From.Id, chosenquery.From.FirstName)
                 classifica.Add(chosenquery.From.Id, 0)
-                Console.WriteLine(chosenquery.From.FirstName & " aggiunto")
+                output = (chosenquery.From.FirstName & " aggiunto")
             End If
         ElseIf resultid = "Rimozione" Then
             If membri.ContainsKey(chosenquery.From.Id) Then
                 membri.Remove(chosenquery.From.Id)
                 classifica.Remove(chosenquery.From.Id)
-                Console.WriteLine(chosenquery.From.FirstName & " rimosso")
+                output = (chosenquery.From.FirstName & " rimosso")
             End If
         ElseIf resultid = "Reset" Then
             If admins.Contains(chosenquery.From.Id) Then
@@ -73,32 +75,41 @@ Module Module1
                 For Each key In keys
                     classifica.Item(key) = 0
                 Next
-                Console.WriteLine("Classifica resettata")
+                output = ("Classifica resettata")
             End If
         ElseIf resultid = "class tot" Then
-            Console.WriteLine("Classifica completa inviata")
+            output = ("Classifica completa inviata")
         ElseIf resultid.Contains("classifica") Then
-            Console.WriteLine("Punteggio membro inviato")
+            output = ("Punteggio membro inviato")
+        ElseIf resultid = "no items" Then
+            output = "Inviata cronologia vuota"
+        ElseIf resultid.Contains("cron") Then
+            output = "Inviato elemento cronologia"
         ElseIf query_points.Contains(resultid) Then
             'l'id è un punteggio, aggiorno i punti
             Integer.TryParse(resultid, punti)
             Dim member As String = query_punti
             modifica_punti_noreply(punti, member)
-            Console.WriteLine(member & " guadagna " & punti)
+            output = (member & If(punti < 0, " perde ", " guadagna ") & punti)
         ElseIf chosenquery.Query.StartsWith("promuovi") Then
             admins.Add(resultid)
             save_admins()
-            Console.WriteLine(resultid & " ora è Admin!")
+            output = (resultid & " ora è Admin!")
         ElseIf chosenquery.Query.StartsWith("retrocedi") Then
             admins.Remove(resultid)
             save_admins()
-            Console.WriteLine(resultid & " ora è utente!")
+            output = (resultid & " ora è utente!")
         ElseIf classifica.ContainsKey(resultid) Then
             If chosenquery.Query.ToLower = "classifica" Then Exit Sub
             Integer.TryParse(query_punti, punti)
             'l'id è un membro, aggiorno i punti
             modifica_punti_noreply(punti, membri.Item(resultid))
-            Console.WriteLine(membri.Item(resultid) & " guadagna " & punti)
+            output = (membri.Item(resultid) & If(punti < 0, " perde ", " guadagna ") & punti)
+        End If
+        If output <> "" Then
+            Console.WriteLine(output)
+            If pila.Count > 15 Then pila.Dequeue()
+            pila.Enqueue(New Tuple(Of String, String)(Now.ToShortDateString & " " & Now.ToShortTimeString, output))
         End If
         salva()
     End Sub
@@ -169,6 +180,26 @@ Module Module1
             res.MessageText = "La classifica è stata azzerata"
             res.Title = "Azzera i punteggi"
             results.Add(res)
+        ElseIf admins.Contains(Query.From.Id) AndAlso "cronologia".Contains(Query.Query.ToLower) Then
+            If pila.Count > 0 Then
+                i = 0
+                For Each cron In pila.Reverse
+                    res = New InlineQueryResultArticle
+                    res.Id = "cron" + i.ToString
+                    res.MessageText = cron.Item1 & ": " & cron.Item2
+                    res.Title = cron.Item2
+                    res.Description = cron.Item1
+                    results.Add(res)
+                    i += 1
+                Next
+            Else
+                res = New InlineQueryResultArticle
+                res.Id = "no items"
+                res.MessageText = "Nessun elemento in cronologia"
+                res.Title = res.MessageText
+                'res.Description = ""
+                results.Add(res)
+            End If
         ElseIf admins.Contains(Query.From.Id) AndAlso Integer.TryParse(query_punti, punti) Then
             'invio "Aggiungi <punti> a membro1/2/3"
             Dim action As String = If(punti < 0, " perde ", " guadagna ")
@@ -232,7 +263,7 @@ Module Module1
             For Each admin In admins
                 res = New InlineQueryResultArticle
                 res.Id = admin
-                res.MessageText = admin & "ora non è più admin!"
+                res.MessageText = admin & " ora non è più admin!"
                 res.Title = "Retrocedi " & admin & " ad utente"
                 results.Add(res)
             Next
