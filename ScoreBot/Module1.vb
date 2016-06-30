@@ -390,26 +390,38 @@ Module Module1
     End Sub
 
     Sub carica()
-        'legge da file la classifica e la inserisce nel dizionario
-        Dim file_classifica As String = "classifica.txt"
-        If Not IO.File.Exists(file_classifica) Then IO.File.WriteAllText(file_classifica, "")
-        For Each line As String In IO.File.ReadAllLines(file_classifica)
-            classifica.Add(line.Split(";")(0), line.Split(";")(1))
+        'carica dai file
+        carica2(utenti, "users.txt")
+        carica2(membri, "membri.txt")
+        carica2(classifica, "classifica.txt")
+        carica2(pila, "cronologia.txt")
+    End Sub
+
+    Sub carica2(ByRef list As Dictionary(Of ULong, String), filename As String)
+        If Not IO.File.Exists(filename) Then IO.File.WriteAllText(filename, "")
+        For Each line As String In IO.File.ReadAllLines(filename)
+            list.Add(line.Split(";")(0), line.Split(";")(1))
         Next
+    End Sub
 
-
-        'legge da file membri e li inserisce nel dizionario
-        Dim file_membri As String = "membri.txt"
-        If Not IO.File.Exists(file_membri) Then IO.File.WriteAllText(file_membri, "")
-        For Each line As String In IO.File.ReadAllLines(file_membri)
-            membri.Add(line.Split(";")(0), line.Split(";")(1))
+    Sub carica2(ByRef list As Dictionary(Of ULong, Integer), filename As String)
+        If Not IO.File.Exists(filename) Then IO.File.WriteAllText(filename, "")
+        For Each line As String In IO.File.ReadAllLines(filename)
+            list.Add(line.Split(";")(0), line.Split(";")(1))
         Next
+    End Sub
 
-        'legge da file users e li inserisce nella lista
-        Dim file_users As String = "users.txt"
-        If Not IO.File.Exists(file_users) Then IO.File.WriteAllText(file_users, "")
-        For Each line As String In IO.File.ReadAllLines(file_users)
-            utenti.Add(line)
+    Sub carica2(ByRef list As List(Of Integer), filename As String)
+        If Not IO.File.Exists(filename) Then IO.File.WriteAllText(filename, "")
+        For Each line In IO.File.ReadAllLines(filename)
+            list.Add(line)
+        Next
+    End Sub
+
+    Sub carica2(ByRef list As Queue(Of Tuple(Of String, String)), filename As String)
+        If Not IO.File.Exists(filename) Then IO.File.WriteAllText(filename, "")
+        For Each line In IO.File.ReadAllLines(filename)
+            list.Enqueue(New Tuple(Of String, String)(line.Split(";")(0), line.Split(";")(1)))
         Next
     End Sub
 
@@ -442,22 +454,37 @@ Module Module1
     End Function
 
     Sub salva()
-        'scrive su file la nuova classifica
-        Dim file_classifica As String = "classifica.txt"
-        Dim lines() As String
-        IO.File.Delete(file_classifica)
-        For Each record As KeyValuePair(Of ULong, Integer) In classifica
-            lines.Add(record.Key & ";" & record.Value)
-        Next
-        IO.File.WriteAllLines(file_classifica, lines)
+        'Salva nei file
+        salva2(classifica, "classifica.txt")
+        salva2(membri, "membri.txt")
+        salva2(pila, "cronologia.txt")
+    End Sub
 
-        Dim file_membri As String = "membri.txt"
-        lines = {}
-        IO.File.Delete(file_membri)
-        For Each record As KeyValuePair(Of ULong, String) In membri
+    Sub salva2(list As Dictionary(Of ULong, String), filename As String)
+        Dim lines() As String
+        IO.File.Delete(filename)
+        For Each record As KeyValuePair(Of ULong, String) In list
             lines.Add(record.Key & ";" & record.Value)
         Next
-        IO.File.WriteAllLines(file_membri, lines)
+        If Not IsNothing(lines) Then IO.File.WriteAllLines(filename, lines)
+    End Sub
+
+    Sub salva2(list As Dictionary(Of ULong, Integer), filename As String)
+        Dim lines() As String
+        IO.File.Delete(filename)
+        For Each record As KeyValuePair(Of ULong, Integer) In list
+            lines.Add(record.Key & ";" & record.Value)
+        Next
+        If Not IsNothing(lines) Then IO.File.WriteAllLines(filename, lines)
+    End Sub
+
+    Sub salva2(list As Queue(Of Tuple(Of String, String)), filename As String)
+        Dim lines() As String
+        IO.File.Delete(filename)
+        For Each record As Tuple(Of String, String) In list
+            lines.Add(record.Item1 & ";" & record.Item2)
+        Next
+        If Not IsNothing(lines) Then IO.File.WriteAllLines(filename, lines)
     End Sub
 
     Function is_member(member_name) As Boolean
